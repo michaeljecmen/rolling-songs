@@ -1,4 +1,11 @@
 {
-    "SPOTIPY_CLIENT_ID":"your-spotify-client-id",
-    "SPOTIPY_CLIENT_SECRET":"your-spotify-client-secret"
+    "SPOTIFY_USERNAME": "your_spotify_username",
+    "SPOTIFY_PLAYLIST": "your_spotify_rolling_playlist_name",
+    "SPOTIFY_CLIENT_ID":"your_spotify_client_id",
+    "SPOTIFY_CLIENT_SECRET":"your_spotify_client_secret",
+    "SPOTIFY_REDIRECT_URI":"http://localhost:8888/callback",
+    "LASTFM_USERNAME": "your_lastfm_username",
+    "LASTFM_PASSWORD": "your_lastfm_password",
+    "LASTFM_API_KEY": "your_lastfm_app_api_key",
+    "LASTFM_SECRET": "your_lastfm_app_secret"
 }
