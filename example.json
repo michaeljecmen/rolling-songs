@@ -7,5 +7,7 @@
     "LASTFM_USERNAME": "your_lastfm_username",
     "LASTFM_PASSWORD": "your_lastfm_password",
     "LASTFM_API_KEY": "your_lastfm_app_api_key",
-    "LASTFM_SECRET": "your_lastfm_app_secret"
+    "LASTFM_SECRET": "your_lastfm_app_secret",
+    "STORAGE_FILENAME": "rolling-songs.json",
+    "LOG_FILENAME": "rolling-log.txt"
 }
