@@ -4,8 +4,6 @@ config.json
 # do not commit cached tokens (spotify uses a .cache-username file)
 *cache*
 
-# do not commit the data file
+# do not commit data files
 rolling-songs.json
-
-# do not commit the data file
-*.txt
+rolling-log.json

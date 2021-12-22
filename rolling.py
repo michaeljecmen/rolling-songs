@@ -1,4 +1,5 @@
 import sys
+import os
 import spotipy
 import pylast
 import json
@@ -9,15 +10,11 @@ from pathlib import Path
 debug = False
 
 # constants
-LONG_DELIMITER = '[|||]'
-SHORT_DELIMITER = '[|]'
-ADDED = '[+]'
-REMOVED = '[-]'
 DATE_FORMAT = "%Y-%m-%d"
 
-def log(s):
+def log(*args, **kwargs):
     if debug:
-        print(s)
+        print(*args, **kwargs)
 
 def get_config():
     # IMPORTANT: config.json is the only thing that's .gitignore'd
@@ -92,7 +89,6 @@ def get_rolling_tracklist(config, spotify):
                     "artists": [ artist['name'] for artist in spotify_track['artists'] ],
                     "album": spotify_track['album']['name']
                 }
-                log(track)
                 tracklist.append(track)
                 
             spotify_tracks = spotify.next(spotify_tracks)
@@ -128,16 +124,16 @@ def are_tracks_same(new, old):
 
 # linear, who cares. returns track or None if not found
 def get_corresponding_track(tracklist, track):
-    for new_track in tracklist:
-        if are_tracks_same(new_track, track):
-            return track
+    for corresponding_track in tracklist:
+        if are_tracks_same(corresponding_track, track):
+            return corresponding_track
     return None
 
 # for each new track, get number of plays at present and store.
 # for each track which was removed from tracklist, get number of plays
 # at present and deduct plays when added to get plays since added.
 # returns updated tracklist, removed tracks as a pair
-def update_tracklist(new_tracklist, tracklist, date, lastfm):
+def update_tracklist(new_tracklist, tracklist, lastfm):
     # separate new tracks and kept tracks
     news = []
     kept = []
@@ -159,39 +155,70 @@ def update_tracklist(new_tracklist, tracklist, date, lastfm):
     for track in removed:
         scrobs = lastfm.get_track_scrobbles(track["artists"][0], track["name"])
         track["playcount"] = len(scrobs) - track["playcount"]
-        track["date_out"] = date
+        log("REMOVED:", track["name"], "by", track["artists"], ",", track["playcount"], "plays since added")
 
     # go through news, set playcounts and timestamp in, and append to kept
     for track in news:
         scrobs = lastfm.get_track_scrobbles(track["artists"][0], track["name"])
         track["playcount"] = len(scrobs)
-        track["date_in"] = date
         kept.append(track)
+        log("ADDED:", track["name"], "by", track["artists"])
 
     # kept is now the updated current tracklist
     return kept, removed, news
 
-# writes the track to the file provided in a consistent format
-def encode_track(track):
-    encoded = ""
-    encoded += LONG_DELIMITER + track["name"] + LONG_DELIMITER
-    for artist in track["artists"]:
-        encoded += artist + SHORT_DELIMITER
-    encoded += LONG_DELIMITER
-    encoded += track["album"] + LONG_DELIMITER
-    return encoded
+def truncate_utf8_chars(filename, count, ignore_newlines=True):
+    """
+    Yoinked from Stack Overflow. - MJ
+
+    Truncates last `count` characters of a text file encoded in UTF-8.
+    :param filename: The path to the text file to read
+    :param count: Number of UTF-8 characters to remove from the end of the file
+    :param ignore_newlines: Set to true, if the newline character at the end of the file should be ignored
+    """
+    with open(filename, 'rb+') as f:
+        size = os.fstat(f.fileno()).st_size
+
+        offset = 1
+        chars = 0
+        while offset <= size:
+            f.seek(-offset, os.SEEK_END)
+            b = ord(f.read(1))
+
+            if ignore_newlines:
+                if b == 0x0D or b == 0x0A:
+                    offset += 1
+                    continue
+
+            if b & 0b10000000 == 0 or b & 0b11000000 == 0b11000000:
+                # This is the first byte of a UTF8 character
+                chars += 1
+                if chars == count:
+                    # When `count` number of characters have been found, move current position back
+                    # with one byte (to include the byte just checked) and truncate the file
+                    f.seek(-1, os.SEEK_CUR)
+                    f.truncate()
+                    return
+            offset += 1
 
 # if it does not already exist, create logfile
-def create_logfile(config, tracklist):
+def create_logfile(config, tracklist, date):
     if file_exists(config["LOG_FILENAME"]):
         return
 
     # create logfile and store current 25 tracks in it
     with open(config["LOG_FILENAME"], "w") as logfile:
-        logfile.write("STARTING TRACKS\n")
+        # playcount is redundant in logfile
         for track in tracklist:
-            logfile.write(encode_track(track) + '\n')
-        logfile.write('\n')
+            track.pop("playcount")
+
+        # init must be a list so changelog can be appended to it later
+        init = [{
+            "date": date,
+            "starting_tracks": tracklist
+        }]
+        
+        logfile.write(json.dumps(init, indent=4))
 
 def append_to_log(config, removed, added, date):
     # no appending needed if no tracks were removed
@@ -201,24 +228,32 @@ def append_to_log(config, removed, added, date):
 
     # add diff to logfile
     with open(config["LOG_FILENAME"], "a") as logfile:
-        logfile.write(LONG_DELIMITER + date + LONG_DELIMITER)
+        # remove the trailing ] character first
+        truncate_utf8_chars(config["LOG_FILENAME"], 1)
+
+        changelog = {
+            "date": date,
+            "in": [],
+            "out": []
+        }
         for rtrack in removed:
-            logfile.write(REMOVED)
-            logfile.write(encode_track(rtrack))
-            logfile.write(rtrack["playcount"] + LONG_DELIMITER + '\n')
+            changelog["out"].append(rtrack)
         for atrack in added:
-            logfile.write(ADDED)
-            logfile.write(encode_track(atrack) + '\n')
-        logfile.write('\n')
+            # playcounts are not necessary for new tracks in log
+            # this is what the updated data store is for
+            atrack.pop("playcount")
+            changelog["in"].append(atrack)
+        logfile.write(',\n' + json.dumps(changelog, indent=4))
+
+        # aaaaand now re-add the trailing ] to ensure valid json list
+        logfile.write('\n]')
 
     return True
 
-def write_tracklist_file(config, tracklist): # TODO have starting-songs.json and rolling log which is list of json substitutions
+def write_tracklist_file(config, tracklist):
     with open(config["STORAGE_FILENAME"], "w") as tfile:
-        if debug:
-            json.dump(tracklist, tfile, indent=4, sort_keys=True)
-        else:
-            json.dump(tracklist, tfile)
+        json.dump(tracklist, tfile, indent=4)
+
 
 def main():
     config = get_config()
@@ -234,15 +269,15 @@ def main():
     date = datetime.datetime.today().strftime(DATE_FORMAT)
     tracklist, removed, added = update_tracklist(tracklist, previous_tracklist, date, lastfm)
 
-    # create logfile if does not exist
-    create_logfile(config, tracklist)
-
-    # finally, write the log and tracklist file to be checked next time
-    append_to_log(config, removed, added, date)
+    # write the tracklist file to be checked next time
     write_tracklist_file(config, tracklist)
+
+    # ...and update logfile, creating it if dne
+    create_logfile(config, tracklist, date)
+    append_to_log(config, removed, added, date)
 
 if __name__ == '__main__':
     # debug printing on for any invocation with more than the required args
-    if len(sys.argv) > 2:
+    if len(sys.argv) > 1:
         debug = True
     main()
