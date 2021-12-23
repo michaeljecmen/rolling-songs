@@ -1,3 +1,5 @@
+#!/usr/bin/python3
+
 import sys
 import os
 import spotipy
@@ -254,7 +256,6 @@ def write_tracklist_file(config, tracklist):
     with open(config["STORAGE_FILENAME"], "w") as tfile:
         json.dump(tracklist, tfile, indent=4)
 
-
 def main():
     config = get_config()
     spotify, lastfm = authenticate_services(config)
@@ -267,7 +268,7 @@ def main():
 
     # get diff and update playcounts for new and removed songs
     date = datetime.datetime.today().strftime(DATE_FORMAT)
-    tracklist, removed, added = update_tracklist(tracklist, previous_tracklist, date, lastfm)
+    tracklist, removed, added = update_tracklist(tracklist, previous_tracklist, lastfm)
 
     # write the tracklist file to be checked next time
     write_tracklist_file(config, tracklist)
