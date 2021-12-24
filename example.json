@@ -9,5 +9,8 @@
     "LASTFM_API_KEY": "your_lastfm_app_api_key",
     "LASTFM_SECRET": "your_lastfm_app_secret",
     "STORAGE_FILENAME": "rolling-songs.json",
-    "LOG_FILENAME": "rolling-log.json"
+    "LOG_FILENAME": "rolling-log.json",
+    "SENDER_EMAIL": "your_sender_email_address",
+    "SENDER_PASSWORD": "your_sender_email_password",
+    "RECEIVER_EMAIL": "your_receiver_email_address"
 }

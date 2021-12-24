@@ -1,9 +1,13 @@
 # do not commit personal details
 config.json
 
-# do not commit cached tokens (spotify uses a .cache-username file)
+# do not commit cached tokens (spotify uses a .cache-{username} file)
 *cache*
 
 # do not commit data files
 rolling-songs.json
 rolling-log.json
+
+# don't even look at this stuff
+__pycache__
+.vscode

@@ -8,17 +8,19 @@ import json
 import datetime
 from pathlib import Path
 
+from gmail import send_gmail
+
 # debug flag
 debug = False
 
 # constants
 DATE_FORMAT = "%Y-%m-%d"
 
-def log(*args, **kwargs):
+def debug_print(*args, **kwargs):
     if debug:
         print(*args, **kwargs)
 
-def get_config():
+def get_config(): # TODO add functionality for leaving things blank
     # IMPORTANT: config.json is the only thing that's .gitignore'd
     # don't put your details in example.json, or a file with any other name
     with open("config.json", "r") as cfile:
@@ -106,7 +108,7 @@ def file_exists(filename):
 # load previous tracklist from json file in config
 def load_previous_tracklist(config):
     if not file_exists(config["STORAGE_FILENAME"]):
-        log("first time running this program, previous tracklist not stored yet")
+        debug_print("first time running this program, previous tracklist not stored yet")
         return {}
 
     with open(config["STORAGE_FILENAME"], "r") as trackfile:
@@ -151,23 +153,26 @@ def update_tracklist(new_tracklist, tracklist, lastfm):
     for existing_track in tracklist:
         if get_corresponding_track(new_tracklist, existing_track) is None:
             # this track must have been removed since we last checked
-            removed.append(existing_track)         
+            removed.append(existing_track)
+
+    # prepare simple log message to email user
+    message = ""
 
     # go through olds, update playcounts and timestamp out
     for track in removed:
         scrobs = lastfm.get_track_scrobbles(track["artists"][0], track["name"])
         track["playcount"] = len(scrobs) - track["playcount"]
-        log("REMOVED:", track["name"], "by", track["artists"], ",", track["playcount"], "plays since added")
-
+        message += "REMOVED: " + track["name"] + " by " + str(track["artists"]) + ", " + track["playcount"] + " plays since added\n"
+      
     # go through news, set playcounts and timestamp in, and append to kept
     for track in news:
         scrobs = lastfm.get_track_scrobbles(track["artists"][0], track["name"])
         track["playcount"] = len(scrobs)
         kept.append(track)
-        log("ADDED:", track["name"], "by", track["artists"])
+        message += "ADDED: " + track["name"] + " by " + str(track["artists"]) + '\n'
 
     # kept is now the updated current tracklist
-    return kept, removed, news
+    return kept, removed, news, message
 
 def truncate_utf8_chars(filename, count, ignore_newlines=True):
     """
@@ -255,6 +260,11 @@ def append_to_log(config, removed, added, date):
 def write_tracklist_file(config, tracklist):
     with open(config["STORAGE_FILENAME"], "w") as tfile:
         json.dump(tracklist, tfile, indent=4)
+    
+def debug_print_and_email_message(config, subject, content):
+    if content != "":
+        send_gmail(config["SENDER_EMAIL"], config["SENDER_PASSWORD"], config["RECEIVER_EMAIL"], subject, content)
+        debug_print(content)
 
 def main():
     config = get_config()
@@ -268,7 +278,7 @@ def main():
 
     # get diff and update playcounts for new and removed songs
     date = datetime.datetime.today().strftime(DATE_FORMAT)
-    tracklist, removed, added = update_tracklist(tracklist, previous_tracklist, lastfm)
+    tracklist, removed, added, message = update_tracklist(tracklist, previous_tracklist, lastfm)
 
     # write the tracklist file to be checked next time
     write_tracklist_file(config, tracklist)
@@ -277,6 +287,9 @@ def main():
     create_logfile(config, tracklist, date)
     append_to_log(config, removed, added, date)
 
+    # finally, log the message and email it to the user
+    debug_print_and_email_message(config, "your rolling playlist was updated!", message)
+    
 if __name__ == '__main__':
     # debug printing on for any invocation with more than the required args
     if len(sys.argv) > 1:
