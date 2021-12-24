@@ -8,6 +8,7 @@
     "LASTFM_PASSWORD": "your_lastfm_password",
     "LASTFM_API_KEY": "your_lastfm_app_api_key",
     "LASTFM_SECRET": "your_lastfm_app_secret",
+    "DATA_DIR": "data/",
     "STORAGE_FILENAME": "current-tracklist.json",
     "LOG_FILENAME": "rolling-log.json",
     "SENDER_EMAIL": "your_sender_email_address",

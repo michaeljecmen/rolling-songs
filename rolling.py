@@ -2,50 +2,27 @@
 
 import sys
 import os
-import spotipy
-import pylast
 import json
-import datetime
 from pathlib import Path
 
-from gmail import send_gmail
+import spotipy
+
+from helpers.date import get_date
+from helpers.config import get_config
+from helpers.gmail import send_gmail
+from helpers.lastfm import get_lastfm_network
+from helpers.log import append_to_log
 
 # debug flag
 debug = False
-
-# constants
-DATE_FORMAT = "%Y-%m-%d"
 
 def debug_print(*args, **kwargs):
     if debug:
         print(*args, **kwargs)
 
-def get_config(): # TODO add functionality for leaving things blank
-    # IMPORTANT: config.json is the only thing that's .gitignore'd
-    # don't put your details in example.json, or a file with any other name
-    with open("config.json", "r") as cfile:
-        config = json.load(cfile)
-
-    # get required fields from the example file
-    with open("example.json", "r") as example_conf:
-        required_fields = json.load(example_conf).keys()
-
-    error = False
-    error_msg = ''
-    for field in required_fields:
-        if field not in config.keys():
-            error = True
-            error_msg += f'\"{field}\", '
-    
-    if error:
-        print('ERROR: your config.json is missing the following required fields:')
-        print('\t[ ', end='')
-        error_msg = error_msg[:-2] # pop trailing comma and space
-        print(error_msg, end='')
-        print(' ]')
-        exit(1)
-
-    return config
+def create_data_dir_if_dne(config):
+    if not os.path.exists(config["DATA_DIR"]):
+        os.makedirs(config["DATA_DIR"])
 
 def authenticate_services(config):
     # will require you to sign in via a browser the first time you launch this
@@ -58,12 +35,7 @@ def authenticate_services(config):
     )
     spotify = spotipy.Spotify(auth=token)
 
-    network = pylast.LastFMNetwork(
-        api_key=config["LASTFM_API_KEY"],
-        api_secret=config["LASTFM_SECRET"],
-        username=config["LASTFM_USERNAME"],
-        password_hash=pylast.md5(config["LASTFM_PASSWORD"])
-    )
+    network = get_lastfm_network(config)
     
     return spotify, network.get_authenticated_user()
 
@@ -107,11 +79,11 @@ def file_exists(filename):
 
 # load previous tracklist from json file in config
 def load_previous_tracklist(config):
-    if not file_exists(config["STORAGE_FILENAME"]):
+    if not file_exists(config["DATA_DIR"] + config["STORAGE_FILENAME"]):
         debug_print("first time running this program, previous tracklist not stored yet")
         return {}
 
-    with open(config["STORAGE_FILENAME"], "r") as trackfile:
+    with open(config["DATA_DIR"] + config["STORAGE_FILENAME"], "r") as trackfile:
         return json.load(trackfile)
 
 def are_tracks_same(new, old):
@@ -174,91 +146,27 @@ def update_tracklist(new_tracklist, tracklist, lastfm):
     # kept is now the updated current tracklist
     return kept, removed, news, message
 
-def truncate_utf8_chars(filename, count, ignore_newlines=True):
-    """
-    Yoinked from Stack Overflow. - MJ
-
-    Truncates last `count` characters of a text file encoded in UTF-8.
-    :param filename: The path to the text file to read
-    :param count: Number of UTF-8 characters to remove from the end of the file
-    :param ignore_newlines: Set to true, if the newline character at the end of the file should be ignored
-    """
-    with open(filename, 'rb+') as f:
-        size = os.fstat(f.fileno()).st_size
-
-        offset = 1
-        chars = 0
-        while offset <= size:
-            f.seek(-offset, os.SEEK_END)
-            b = ord(f.read(1))
-
-            if ignore_newlines:
-                if b == 0x0D or b == 0x0A:
-                    offset += 1
-                    continue
-
-            if b & 0b10000000 == 0 or b & 0b11000000 == 0b11000000:
-                # This is the first byte of a UTF8 character
-                chars += 1
-                if chars == count:
-                    # When `count` number of characters have been found, move current position back
-                    # with one byte (to include the byte just checked) and truncate the file
-                    f.seek(-1, os.SEEK_CUR)
-                    f.truncate()
-                    return
-            offset += 1
-
 # if it does not already exist, create logfile
-def create_logfile(config, tracklist, date):
-    if file_exists(config["LOG_FILENAME"]):
+def create_logfile(config, tracklist):
+    if file_exists(config["DATA_DIR"] + config["LOG_FILENAME"]):
         return
 
     # create logfile and store current 25 tracks in it
-    with open(config["LOG_FILENAME"], "w") as logfile:
+    with open(config["DATA_DIR"] + config["LOG_FILENAME"], "w") as logfile:
         # playcount is redundant in logfile
         for track in tracklist:
             track.pop("playcount")
 
         # init must be a list so changelog can be appended to it later
         init = [{
-            "date": date,
+            "date": get_date(),
             "starting_tracks": tracklist
         }]
         
         logfile.write(json.dumps(init, indent=4))
 
-def append_to_log(config, removed, added, date):
-    # no appending needed if no tracks were removed
-    # also, skip the day altogether if there wasn't an equal exchange
-    if len(removed) == 0 or len(removed) != len(added):
-        return False
-
-    # add diff to logfile
-    with open(config["LOG_FILENAME"], "a") as logfile:
-        # remove the trailing ] character first
-        truncate_utf8_chars(config["LOG_FILENAME"], 1)
-
-        changelog = {
-            "date": date,
-            "in": [],
-            "out": []
-        }
-        for rtrack in removed:
-            changelog["out"].append(rtrack)
-        for atrack in added:
-            # playcounts are not necessary for new tracks in log
-            # this is what the updated data store is for
-            atrack.pop("playcount")
-            changelog["in"].append(atrack)
-        logfile.write(',\n' + json.dumps(changelog, indent=4))
-
-        # aaaaand now re-add the trailing ] to ensure valid json list
-        logfile.write('\n]')
-
-    return True
-
 def write_tracklist_file(config, tracklist):
-    with open(config["STORAGE_FILENAME"], "w") as tfile:
+    with open(config["DATA_DIR"] + config["STORAGE_FILENAME"], "w") as tfile:
         json.dump(tracklist, tfile, indent=4)
     
 def debug_print_and_email_message(config, subject, content):
@@ -277,15 +185,16 @@ def main():
     previous_tracklist = load_previous_tracklist(config)
 
     # get diff and update playcounts for new and removed songs
-    date = datetime.datetime.today().strftime(DATE_FORMAT)
     tracklist, removed, added, message = update_tracklist(tracklist, previous_tracklist, lastfm)
 
-    # write the tracklist file to be checked next time
+    # write the tracklist file to be checked next time,
+    # creating the data dir if it does not yet exist
+    create_data_dir_if_dne(config)
     write_tracklist_file(config, tracklist)
 
     # ...and update logfile, creating it if dne
-    create_logfile(config, tracklist, date)
-    append_to_log(config, removed, added, date)
+    create_logfile(config, tracklist)
+    append_to_log(config, removed, added)
 
     # finally, log the message and email it to the user
     debug_print_and_email_message(config, "your rolling playlist was updated!", message)
