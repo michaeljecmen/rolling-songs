@@ -162,14 +162,14 @@ def update_tracklist(new_tracklist, tracklist, lastfm):
     for track in removed:
         scrobs = lastfm.get_track_scrobbles(track["artists"][0], track["name"])
         track["playcount"] = len(scrobs) - track["playcount"]
-        message += "REMOVED: " + track["name"] + " by " + str(track["artists"]) + ", " + track["playcount"] + " plays since added\n"
+        message += "[-] " + track["name"] + " by " + str(track["artists"]) + ", " + track["playcount"] + " plays since added\n"
       
     # go through news, set playcounts and timestamp in, and append to kept
     for track in news:
         scrobs = lastfm.get_track_scrobbles(track["artists"][0], track["name"])
         track["playcount"] = len(scrobs)
         kept.append(track)
-        message += "ADDED: " + track["name"] + " by " + str(track["artists"]) + '\n'
+        message += "[+] " + track["name"] + " by " + str(track["artists"]) + '\n'
 
     # kept is now the updated current tracklist
     return kept, removed, news, message

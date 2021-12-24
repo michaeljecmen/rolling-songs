@@ -25,3 +25,12 @@ over to [the lastfm dev dashboard](https://www.last.fm/api/accounts), create a d
 5. run ```cd rolling-songs/```, then ```chmod +x rolling.py``` to enter the directory and mark the program as executable (not really necessary, but makes cron-jobbing the app easier)
 6. run the program once with ```./rolling.py``` and authenticate the app when it opens a browser window and yells at you. you should be auth'd for a while (no idea how long the tokens last).
 7. run the program once a day (or whenever you make changes to your playlist) with ```./rolling.py```, or, even better, set up a cron job on a box somewhere.
+
+## data storage
+the data itself is stored in two files:
+1. the file named ```{STORAGE_FILENAME}```, defaulted to ```current-tracklist.json```. this file stores the current tracklist from your playlist of choice. most key-value pairs are self explanatory, but the ```playcount``` field in each json object denotes the total playcount for this track *prior to the track being added to the playlist*. when the track is removed, this value is then subtracted from the current playcount to get the "number of plays during its time on the playlist" value.
+2. the file named ```{LOG_FILENAME}```, defaulted to ```rolling-log.json```. this file stores the initial tracklist (from the first run of the program), then a list of substitution events. here (stored in each json object in the ```out``` list of each sub-event) the ```playcount``` value refers to the "true" number of plays the track had during its tenure on your playlist. furthermore, this file is simply appended to each time the program detects a tracklist change.
+
+of course, you can change these default values in your ```config.json``` file.
+
+I made the decision to make both of these items json files, which allows you to read (and edit, if you so choose) the values as you see fit (for instance, sometimes you'll know better than the program when a song was added or removed from the playlist). also, json parsing is easy, and this doesn't need to be a highly performant application for my purposes.
