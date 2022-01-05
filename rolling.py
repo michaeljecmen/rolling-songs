@@ -139,6 +139,8 @@ def update_tracklist(new_tracklist, tracklist, lastfm):
     # go through news, set playcounts and timestamp in, and append to kept
     for track in news:
         scrobs = lastfm.get_track_scrobbles(track["artists"][0], track["name"])
+
+        # only track plays before yesterday (plays on day the track was added count towards pc)
         track["playcount"] = len([s for s in scrobs if is_ts_before_yesterday(int(s.timestamp)) ])
         kept.append(track)
         message += "[+] " + track["name"] + " by " + str(track["artists"]) + '\n'
