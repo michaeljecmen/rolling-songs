@@ -7,7 +7,7 @@ from pathlib import Path
 
 import spotipy
 
-from helpers.date import get_date
+from helpers.date import get_date, is_ts_before_yesterday
 from helpers.config import get_config
 from helpers.gmail import send_gmail
 from helpers.lastfm import get_lastfm_network
@@ -135,11 +135,11 @@ def update_tracklist(new_tracklist, tracklist, lastfm):
         scrobs = lastfm.get_track_scrobbles(track["artists"][0], track["name"])
         track["playcount"] = len(scrobs) - track["playcount"]
         message += "[-] " + track["name"] + " by " + str(track["artists"]) + ", " + str(track["playcount"]) + " plays since added\n"
-      
+
     # go through news, set playcounts and timestamp in, and append to kept
     for track in news:
         scrobs = lastfm.get_track_scrobbles(track["artists"][0], track["name"])
-        track["playcount"] = len(scrobs)
+        track["playcount"] = len([s for s in scrobs if is_ts_before_yesterday(int(s.timestamp)) ])
         kept.append(track)
         message += "[+] " + track["name"] + " by " + str(track["artists"]) + '\n'
 
