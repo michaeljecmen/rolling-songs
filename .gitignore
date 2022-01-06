@@ -1,9 +1,6 @@
 # do not commit personal details
 config.json
 
-# do not commit cached tokens (spotify uses a .cache-{username} file)
-*cache*
-
 # do not commit data files
 data/
 current-tracklist.json

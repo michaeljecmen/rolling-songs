@@ -6,9 +6,11 @@ import json
 from pathlib import Path
 
 import spotipy
+from spotipy.oauth2 import SpotifyOAuth
 
+from helpers.cache import ConfigCacheHandler
 from helpers.date import get_date, is_ts_before_yesterday
-from helpers.config import get_config
+from helpers.config import read_config, get_absolute_rolling_songs_dir
 from helpers.gmail import send_gmail
 from helpers.lastfm import get_lastfm_network
 from helpers.log import append_to_log
@@ -21,19 +23,21 @@ def debug_print(*args, **kwargs):
         print(*args, **kwargs)
 
 def create_data_dir_if_dne(config):
-    if not os.path.exists(config["DATA_DIR"]):
-        os.makedirs(config["DATA_DIR"])
+    data_dir_path = get_absolute_rolling_songs_dir() + config["DATA_DIR"]
+    if not os.path.exists(data_dir_path):
+        os.makedirs(data_dir_path)
 
 def authenticate_services(config):
     # will require you to sign in via a browser the first time you launch this
-    token = spotipy.util.prompt_for_user_token(
-        config["SPOTIFY_USERNAME"],
-        "user-library-read",
-        config["SPOTIFY_CLIENT_ID"],
-        config["SPOTIFY_CLIENT_SECRET"],
-        config["SPOTIFY_REDIRECT_URI"]
-    )
-    spotify = spotipy.Spotify(auth=token)
+    # token = spotipy.util.prompt_for_user_token(
+    #     config["SPOTIFY_USERNAME"],
+    #     "user-library-read",
+    #     config["SPOTIFY_CLIENT_ID"],
+    #     config["SPOTIFY_CLIENT_SECRET"],
+    #     config["SPOTIFY_REDIRECT_URI"]
+    # )
+    oauth = SpotifyOAuth(client_id=config["SPOTIFY_CLIENT_ID"], client_secret=config["SPOTIFY_CLIENT_SECRET"], redirect_uri=config["SPOTIFY_REDIRECT_URI"], cache_handler=ConfigCacheHandler())
+    spotify = spotipy.Spotify(oauth_manager=oauth)
 
     network = get_lastfm_network(config)
     
@@ -79,11 +83,12 @@ def file_exists(filename):
 
 # load previous tracklist from json file in config
 def load_previous_tracklist(config):
-    if not file_exists(config["DATA_DIR"] + config["STORAGE_FILENAME"]):
+    tracklist_filename = get_absolute_rolling_songs_dir() + config["DATA_DIR"] + config["STORAGE_FILENAME"]
+    if not file_exists(tracklist_filename):
         debug_print("first time running this program, previous tracklist not stored yet")
         return {}
 
-    with open(config["DATA_DIR"] + config["STORAGE_FILENAME"], "r") as trackfile:
+    with open(tracklist_filename, "r") as trackfile:
         return json.load(trackfile)
 
 def are_tracks_same(new, old):
@@ -150,11 +155,12 @@ def update_tracklist(new_tracklist, tracklist, lastfm):
 
 # if it does not already exist, create logfile
 def create_logfile(config, tracklist):
-    if file_exists(config["DATA_DIR"] + config["LOG_FILENAME"]):
+    logfilename = get_absolute_rolling_songs_dir() + config["DATA_DIR"] + config["LOG_FILENAME"]
+    if file_exists(logfilename):
         return
 
     # create logfile and store current 25 tracks in it
-    with open(config["DATA_DIR"] + config["LOG_FILENAME"], "w") as logfile:
+    with open(logfilename, "w") as logfile:
         # playcount is redundant in logfile
         for track in tracklist:
             track.pop("playcount")
@@ -168,7 +174,7 @@ def create_logfile(config, tracklist):
         logfile.write(json.dumps(init, indent=4))
 
 def write_tracklist_file(config, tracklist):
-    with open(config["DATA_DIR"] + config["STORAGE_FILENAME"], "w") as tfile:
+    with open(get_absolute_rolling_songs_dir() + config["DATA_DIR"] + config["STORAGE_FILENAME"], "w") as tfile:
         json.dump(tracklist, tfile, indent=4)
     
 def debug_print_and_email_message(config, subject, content):
@@ -177,7 +183,7 @@ def debug_print_and_email_message(config, subject, content):
         debug_print(content)
 
 def main():
-    config = get_config()
+    config = read_config()
     spotify, lastfm = authenticate_services(config)
 
     # get current tracks and compare to previously stored tracks

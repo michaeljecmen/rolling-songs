@@ -4,7 +4,7 @@ import json
 import sys
 import shutil
 
-from helpers.config import get_config
+from helpers.config import read_config, get_absolute_rolling_songs_dir
 from helpers.lastfm import get_lastfm_network
 from helpers.log import append_to_log
 
@@ -13,11 +13,11 @@ from helpers.log import append_to_log
 # also re-parses and pretty prints the logfile, 
 # which has probably been pretty ugly up until now
 def finalize(outfilename):
-    config = get_config()
+    config = read_config()
     lastfm = get_lastfm_network(config).get_authenticated_user()
 
     trackfilename = config["DATA_DIR"] + config["STORAGE_FILENAME"]
-    with open(trackfilename, "r") as trackfile:
+    with open(get_absolute_rolling_songs_dir() + trackfilename, "r") as trackfile:
         tracklist = json.load(trackfile)
     
     for track in tracklist:
@@ -31,10 +31,10 @@ def finalize(outfilename):
     append_to_log(config, tracklist, [])
 
     # write log to new file prettily
-    with open(config["DATA_DIR"] + outfilename, "r") as outfile:
+    with open(get_absolute_rolling_songs_dir() + config["DATA_DIR"] + outfilename, "r") as outfile:
         unformatted = json.load(outfile)
     
-    with open(config["DATA_DIR"] + outfilename, "w") as outfile:
+    with open(get_absolute_rolling_songs_dir() + config["DATA_DIR"] + outfilename, "w") as outfile:
         json.dump(unformatted, outfile, indent=4)
 
 if __name__ == "__main__":

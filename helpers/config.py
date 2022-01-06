@@ -1,13 +1,17 @@
 import json
+from os.path import dirname, abspath
 
-def get_config(): # TODO add functionality for leaving things blank
+def get_absolute_rolling_songs_dir():
+    return dirname(dirname(abspath(__file__))) + "/"
+
+def read_config(): # TODO add functionality for leaving out the lastfm info
     # IMPORTANT: config.json is the only thing that's .gitignore'd
     # don't put your details in example.json, or a file with any other name
-    with open("config/config.json", "r") as cfile:
+    with open(get_absolute_rolling_songs_dir() + "config/config.json", "r") as cfile:
         config = json.load(cfile)
 
     # get required fields from the example file
-    with open("config/example.json", "r") as example_conf:
+    with open(get_absolute_rolling_songs_dir() + "config/example.json", "r") as example_conf:
         required_fields = json.load(example_conf).keys()
 
     error = False
@@ -26,3 +30,7 @@ def get_config(): # TODO add functionality for leaving things blank
         exit(1)
 
     return config
+
+def write_config(config):
+    with open(get_absolute_rolling_songs_dir() + "config/config.json", "w") as cfile:
+        json.dump(config, cfile, indent=4)

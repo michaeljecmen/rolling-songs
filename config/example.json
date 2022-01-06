@@ -13,5 +13,6 @@
     "LOG_FILENAME": "rolling-log.json",
     "SENDER_EMAIL": "your_sender_email_address",
     "SENDER_PASSWORD": "your_sender_email_password",
-    "RECEIVER_EMAIL": "your_receiver_email_address"
+    "RECEIVER_EMAIL": "your_receiver_email_address",
+    "SPOTIFY_TOKEN": "THE PROGRAM WILL MODIFY THIS"
 }

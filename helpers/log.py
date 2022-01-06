@@ -2,6 +2,7 @@ import os
 import json
 
 from helpers.date import get_date
+from helpers.config import get_absolute_rolling_songs_dir
 
 def truncate_utf8_chars(filename, count, ignore_newlines=True):
     """
@@ -43,9 +44,10 @@ def append_to_log(config, removed, added):
         return False
 
     # add diff to logfile
-    with open(config["DATA_DIR"] + config["LOG_FILENAME"], "a") as logfile:
+    logfilename = get_absolute_rolling_songs_dir() + config["DATA_DIR"] + config["LOG_FILENAME"]
+    with open(logfilename, "a") as logfile:
         # remove the trailing ] character first
-        truncate_utf8_chars(config["DATA_DIR"] + config["LOG_FILENAME"], 1)
+        truncate_utf8_chars(logfilename, 1)
 
         changelog = {
             "date": get_date(),
