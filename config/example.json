@@ -1,6 +1,7 @@
 {
     "SPOTIFY_USERNAME": "your_spotify_username",
     "SPOTIFY_PLAYLIST": "your_spotify_rolling_playlist_name",
+    "SPOTIFY_LOG_PLAYLIST": "your_spotify_rolling_log_playlist_name, blank if none",
     "SPOTIFY_CLIENT_ID":"your_spotify_client_id",
     "SPOTIFY_CLIENT_SECRET":"your_spotify_client_secret",
     "SPOTIFY_REDIRECT_URI":"http://localhost:8888/callback",

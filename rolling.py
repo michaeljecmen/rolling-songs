@@ -28,14 +28,6 @@ def create_data_dir_if_dne(config):
         os.makedirs(data_dir_path)
 
 def authenticate_services(config):
-    # will require you to sign in via a browser the first time you launch this
-    # token = spotipy.util.prompt_for_user_token(
-    #     config["SPOTIFY_USERNAME"],
-    #     "user-library-read",
-    #     config["SPOTIFY_CLIENT_ID"],
-    #     config["SPOTIFY_CLIENT_SECRET"],
-    #     config["SPOTIFY_REDIRECT_URI"]
-    # )
     oauth = SpotifyOAuth(client_id=config["SPOTIFY_CLIENT_ID"], client_secret=config["SPOTIFY_CLIENT_SECRET"], redirect_uri=config["SPOTIFY_REDIRECT_URI"], cache_handler=ConfigCacheHandler())
     spotify = spotipy.Spotify(oauth_manager=oauth)
 
@@ -49,10 +41,24 @@ def get_rolling_tracklist(config, spotify):
     spotify_username = config["SPOTIFY_USERNAME"]
     playlists = spotify.user_playlists(spotify_username)
     tracklist = []
+    log_playlist_id = ""
+    rolling_found = False
     for playlist in playlists['items']:
 
+        # defense against taking another user's "rolling" playlist that you have liked
+        # not sure if this is even possible but why not
         if playlist['owner']['id'] != spotify_username:
             continue
+
+        # only want to request the playlists once, so need to check
+        # for the log playlist and the rolling playlist here and remember
+        # the log playlist id
+        if playlist['name'] == config["SPOTIFY_LOG_PLAYLIST"]:
+            log_playlist_id = playlist['uri']
+            
+            # break if we've found both now
+            if rolling_found:
+                break
 
         if playlist['name'] != config["SPOTIFY_PLAYLIST"]:
             continue
@@ -67,16 +73,21 @@ def get_rolling_tracklist(config, spotify):
                 track = {
                     "name": spotify_track['name'],
                     "artists": [ artist['name'] for artist in spotify_track['artists'] ],
-                    "album": spotify_track['album']['name']
+                    "album": spotify_track['album']['name'],
+                    "uri": spotify_track['uri'],
                 }
                 tracklist.append(track)
                 
             spotify_tracks = spotify.next(spotify_tracks)
         
         # can only be one rolling playlist
-        break
+        if log_playlist_id != "":
+            break
+        
+        # now as soon as we find the rolling playlist, we can break
+        rolling_found = True
 
-    return tracklist
+    return tracklist, log_playlist_id
 
 def file_exists(filename):
     return Path(filename).exists()
@@ -109,6 +120,14 @@ def get_corresponding_track(tracklist, track):
         if are_tracks_same(corresponding_track, track):
             return corresponding_track
     return None
+
+# adds the tracks passed to the log playlist on the users' spotify account
+def add_tracks_to_log_playlist(config, spotify, log_playlist_id, new_tracks):
+    if len(new_tracks) == 0:
+        return
+    
+    track_uris = [ track['uri'] for track in new_tracks ]
+    spotify.user_playlist_add_tracks(config["SPOTIFY_USERNAME"], playlist_id=log_playlist_id, tracks=track_uris)
 
 # for each new track, get number of plays at present and store.
 # for each track which was removed from tracklist, get number of plays
@@ -170,7 +189,7 @@ def create_logfile(config, tracklist):
             "date": get_date(),
             "starting_tracks": tracklist
         }]
-        
+
         logfile.write(json.dumps(init, indent=4))
 
 def write_tracklist_file(config, tracklist):
@@ -187,7 +206,7 @@ def main():
     spotify, lastfm = authenticate_services(config)
 
     # get current tracks and compare to previously stored tracks
-    tracklist = get_rolling_tracklist(config, spotify)
+    tracklist, log_playlist_id = get_rolling_tracklist(config, spotify)
 
     # read previous tracklist from storage file
     previous_tracklist = load_previous_tracklist(config)
@@ -195,6 +214,9 @@ def main():
     # get diff and update playcounts for new and removed songs
     tracklist, removed, added, message = update_tracklist(tracklist, previous_tracklist, lastfm)
 
+    # update the spotify log playlist with the songs that were added
+    add_tracks_to_log_playlist(config, spotify, log_playlist_id, added)
+    
     # write the tracklist file to be checked next time,
     # creating the data dir if it does not yet exist
     create_data_dir_if_dne(config)
