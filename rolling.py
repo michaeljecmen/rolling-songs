@@ -35,12 +35,34 @@ def authenticate_services(config):
     
     return spotify, network.get_authenticated_user()
 
+# given a playlist, returns the full tracklist as a dict of uri->{name artists album}
+def fetch_full_tracklist(spotify, playlist):
+    tracklist = {}
+    results = spotify.playlist(playlist['id'], fields="tracks,next")
+    spotify_tracks = results['tracks']
+    while spotify_tracks:
+        # not quite sure why the for loop is needed here
+        for item in spotify_tracks['items']:
+            spotify_track = item['track']
+            tracklist[spotify_track['uri']] = {
+                "name": spotify_track['name'],
+                "artists": [ artist['name'] for artist in spotify_track['artists'] ],
+                "album": spotify_track['album']['name'],
+                "uri": spotify_track['uri'],
+            }
+            
+        spotify_tracks = spotify.next(spotify_tracks)
+        
+    return tracklist
+
 # returns list of { "name": trackname, "artists": [artists], "album": album }
 # containing each song in the spotify playlist provided
+# also returns the tracklist from the log playlist and its playlist id
 def get_rolling_tracklist(config, spotify):
     spotify_username = config["SPOTIFY_USERNAME"]
     playlists = spotify.user_playlists(spotify_username)
-    tracklist = []
+    tracklist = {}
+    log_tracklist = {}
     log_playlist_id = ""
     rolling_found = False
     for playlist in playlists['items']:
@@ -55,39 +77,24 @@ def get_rolling_tracklist(config, spotify):
         # the log playlist id
         if playlist['name'] == config["SPOTIFY_LOG_PLAYLIST"]:
             log_playlist_id = playlist['uri']
+            log_tracklist = fetch_full_tracklist(spotify, playlist)
             
             # break if we've found both now
             if rolling_found:
                 break
 
-        if playlist['name'] != config["SPOTIFY_PLAYLIST"]:
-            continue
+        if playlist['name'] == config["SPOTIFY_PLAYLIST"]:
+            # actually get the songs
+            tracklist = fetch_full_tracklist(spotify, playlist)
         
-        # found the rolling playlist
-        results = spotify.playlist(playlist['id'], fields="tracks,next")
-        spotify_tracks = results['tracks']
-        while spotify_tracks:
-            # not quite sure why the for loop is needed here
-            for item in spotify_tracks['items']:
-                spotify_track = item['track']
-                track = {
-                    "name": spotify_track['name'],
-                    "artists": [ artist['name'] for artist in spotify_track['artists'] ],
-                    "album": spotify_track['album']['name'],
-                    "uri": spotify_track['uri'],
-                }
-                tracklist.append(track)
-                
-            spotify_tracks = spotify.next(spotify_tracks)
-        
-        # can only be one rolling playlist
-        if log_playlist_id != "":
-            break
+            # break if we've found both now
+            if log_playlist_id != "":
+                break
         
         # now as soon as we find the rolling playlist, we can break
         rolling_found = True
 
-    return tracklist, log_playlist_id
+    return tracklist, log_tracklist, log_playlist_id
 
 def file_exists(filename):
     return Path(filename).exists()
@@ -137,7 +144,7 @@ def update_tracklist(new_tracklist, tracklist, lastfm):
     # separate new tracks and kept tracks
     news = []
     kept = []
-    for new_track in new_tracklist:
+    for new_track in new_tracklist.values():
         existing_track = get_corresponding_track(tracklist, new_track)
         if existing_track is None:
             news.append(new_track)
@@ -147,7 +154,7 @@ def update_tracklist(new_tracklist, tracklist, lastfm):
     # now repeat in reverse to find removed tracks
     removed = []
     for existing_track in tracklist:
-        if get_corresponding_track(new_tracklist, existing_track) is None:
+        if get_corresponding_track(new_tracklist.values(), existing_track) is None:
             # this track must have been removed since we last checked
             removed.append(existing_track)
 
@@ -172,6 +179,16 @@ def update_tracklist(new_tracklist, tracklist, lastfm):
     # kept is now the updated current tracklist
     return kept, removed, news, message
 
+# if poss_dupes entry (list of uris) exists in dic, 
+# do not add to the final list 
+def prune_duplicates(poss_dupes, dic):
+    out = []
+    for elt in poss_dupes:
+        if elt['uri'] not in dic.keys():
+            out.append(elt)
+            
+    return out
+    
 # if it does not already exist, create logfile
 def create_logfile(config, tracklist):
     logfilename = get_absolute_rolling_songs_dir() + config["DATA_DIR"] + config["LOG_FILENAME"]
@@ -206,13 +223,17 @@ def main():
     spotify, lastfm = authenticate_services(config)
 
     # get current tracks and compare to previously stored tracks
-    tracklist, log_playlist_id = get_rolling_tracklist(config, spotify)
+    tracklist, log_tracklist, log_playlist_id = get_rolling_tracklist(config, spotify)
 
     # read previous tracklist from storage file
     previous_tracklist = load_previous_tracklist(config)
 
     # get diff and update playcounts for new and removed songs
     tracklist, removed, added, message = update_tracklist(tracklist, previous_tracklist, lastfm)
+
+    # if a song makes it on the rolling playlist more than once, do not add it after the first time
+    # in other words, do not add songs to the log playlist that are already on it
+    added = prune_duplicates(added, log_tracklist)
 
     # update the spotify log playlist with the songs that were added
     add_tracks_to_log_playlist(config, spotify, log_playlist_id, added)
