@@ -60,41 +60,46 @@ def fetch_full_tracklist(spotify, playlist):
 # also returns the tracklist from the log playlist and its playlist id
 def get_rolling_tracklist(config, spotify):
     spotify_username = config["SPOTIFY_USERNAME"]
-    playlists = spotify.user_playlists(spotify_username)
+    playlists = {"items":["sentinel"]}
     tracklist = {}
     log_tracklist = {}
     log_playlist_id = ""
     rolling_found = False
-    for playlist in playlists['items']:
+    offset = 0
+    while len(playlists['items']) > 0:
+        playlists = spotify.user_playlists(spotify_username, limit=50, offset=offset)
+        offset += 50
+        for playlist in playlists['items']:
 
-        # defense against taking another user's "rolling" playlist that you have liked
-        # not sure if this is even possible but why not
-        if playlist['owner']['id'] != spotify_username:
-            continue
+            # defense against taking another user's "rolling" playlist that you have liked
+            # not sure if this is even possible but why not
+            if playlist['owner']['id'] != spotify_username:
+                continue
 
-        # only want to request the playlists once, so need to check
-        # for the log playlist and the rolling playlist here and remember
-        # the log playlist id
-        if playlist['name'] == config["SPOTIFY_LOG_PLAYLIST"]:
-            log_playlist_id = playlist['uri']
-            log_tracklist = fetch_full_tracklist(spotify, playlist)
+            # only want to request the playlists once, so need to check
+            # for the log playlist and the rolling playlist here and remember
+            # the log playlist id
+            if playlist['name'] == config["SPOTIFY_LOG_PLAYLIST"]:
+                log_playlist_id = playlist['uri']
+                log_tracklist = fetch_full_tracklist(spotify, playlist)
+                
+                # break if we've found both now
+                if rolling_found:
+                    return tracklist, log_tracklist, log_playlist_id
+
+            if playlist['name'] == config["SPOTIFY_PLAYLIST"]:
+                # actually get the songs
+                tracklist = fetch_full_tracklist(spotify, playlist)
             
-            # break if we've found both now
-            if rolling_found:
-                break
+                # break if we've found both now
+                if log_playlist_id != "":
+                    return tracklist, log_tracklist, log_playlist_id
+            
+                # now as soon as we find the rolling playlist, we can break
+                rolling_found = True
 
-        if playlist['name'] == config["SPOTIFY_PLAYLIST"]:
-            # actually get the songs
-            tracklist = fetch_full_tracklist(spotify, playlist)
-        
-            # break if we've found both now
-            if log_playlist_id != "":
-                break
-        
-        # now as soon as we find the rolling playlist, we can break
-        rolling_found = True
-
-    return tracklist, log_tracklist, log_playlist_id
+    print("rolling playlist not found")
+    exit(1)
 
 def file_exists(filename):
     return Path(filename).exists()
@@ -247,8 +252,8 @@ def main():
     create_logfile(config, tracklist)
     append_to_log(config, removed, added)
 
-    # finally, log the message and email it to the user
-    debug_print_and_email_message(config, "your rolling playlist was updated!", message)
+    # finally, log the message and email it to the user (disabled 10/5/22 mjj)
+    # debug_print_and_email_message(config, "your rolling playlist was updated!", message)
     
 if __name__ == '__main__':
     # debug printing on for any invocation with more than the required args
