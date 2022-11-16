@@ -1,4 +1,6 @@
 #!/usr/bin/python3
+# run "which python3" in your terminal and
+# replace "/usr/bin/python3" above with the output
 
 import sys
 import os
@@ -20,7 +22,9 @@ debug = False
 
 def debug_print(*args, **kwargs):
     if debug:
-        print(*args, **kwargs)
+        print(*args, **kwargs) 
+        
+# TODO at end of month dump top 10 for the month into timelapse/month-year playlist
 
 def create_data_dir_if_dne(config):
     data_dir_path = get_absolute_rolling_songs_dir() + config["DATA_DIR"]

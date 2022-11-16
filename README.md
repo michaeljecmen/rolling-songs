@@ -18,7 +18,7 @@ make a template I'll link it here so others can use it too.
 
 ## usage
 1. clone this repo with ```git clone git@github.com:michaeljecmen/rolling-songs.git```
-2. run ```pip install spotipy pylast```
+2. run ```pip3 install spotipy pylast```
 3.  ```cp example.json config.json``` and modify all of the fields except the spotify url
         
     3a. to find your spotify client id and client secret, head over to [the spotify dev dashboard](https://developer.spotify.com/dashboard/), log in, and create an application. 
