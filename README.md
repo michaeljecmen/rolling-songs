@@ -1,5 +1,7 @@
 # rolling-songs: the sliding window playlist statkeeper
 
+### important: this repo is now *out of date*. head on over to https://github.com/michaeljecmen/spotify-manager/ for the updated module and its siblings
+
 say you have some sliding window playlist, which always contains N songs: 
 whenever you add one song, you remove another. say you also want stats kept for this list. this app does that for you. 
 at the end of the year, you can take these stats and generate a cool poster or something.
